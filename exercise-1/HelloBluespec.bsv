@@ -11,7 +11,6 @@ package HelloBluespec;
 
     rule displayHello (counter == 0);
       $display("(%0d) Hello World", $time);
-			$display(is_led);
 			is_led <= !is_led;
     endrule
 
