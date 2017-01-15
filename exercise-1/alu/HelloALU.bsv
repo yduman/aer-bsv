@@ -1,6 +1,38 @@
 package HelloALU;
 	
-	typedef enum{Mul, Div, Add, Sub, And, Or} AluOps deriving (Eq, Bits);
+	typedef enum{Mul, Div, Add, Sub, And, Or, Pow} AluOps deriving (Eq, Bits);
+
+	interface Power;
+		method Action setOperands(Int#(32) a, Int#(32) b);
+		method Int#(32) getResult();
+	endinterface
+
+	module mkPower(Power);
+		Reg#(Int#(32)) operandA <- mkReg(0);
+		Reg#(Int#(32)) operandB <- mkReg(0);
+		Reg#(Int#(32)) result <- mkReg(0);
+		Reg#(Bool) has_result <- mkReg(False);
+
+		rule calculate_power (operandB > 0);
+			operandB <= operandB - 1;
+			result <= result * operandA;
+		endrule
+
+		rule calculate_power_done (operandB == 0 && !has_result);
+			has_result <= True;
+		endrule
+
+		method Action setOperands(Int#(32) a, Int#(32) b);
+			result <= 1;
+			operandA <= a;
+			operandB <= b;
+			has_result <= False;
+		endmethod
+
+		method Int#(32) getResult() if (has_result);
+			return result;
+		endmethod
+	endmodule
 
 	interface HelloALU;
 		method Action setupCalculation(AluOps op, Int#(32) a, Int#(32) b);
@@ -15,6 +47,8 @@ package HelloALU;
 		Reg#(Bool) has_result <- mkReg(False);
 		Reg#(Bool) new_values <- mkReg(False);
 
+		Power pow <- mkPower();
+
 		rule calculate (new_values);
 			Int#(32) tmp = 0;
 			case(operation)
@@ -24,6 +58,7 @@ package HelloALU;
 				Sub: tmp = operandA - operandB;
 				And: tmp = operandA & operandB;
 				Or: tmp = operandA | operandB;
+				Pow: tmp = pow.getResult();
 			endcase
 			result <= tmp;
 			new_values <= False;
@@ -36,6 +71,9 @@ package HelloALU;
 			operation <= op;
 			new_values <= True;
 			has_result <= False;
+
+			if (op == Pow)
+				pow.setOperands(a, b);
 		endmethod
 
 		method ActionValue#(Int#(32)) getResult() if (has_result);
@@ -84,13 +122,19 @@ package HelloALU;
 			state <= state + 1;
 		endrule
 
-		rule displayResults;
-			$display("Result: %d", uut.getResult());
+		rule testPow (state == 12);
+			$display("Testing 2 to the power of 5...");
+			uut.setupCalculation(Pow, 2, 5);
 			state <= state + 1;
 		endrule
 
-		rule endSimulation (state == 12);
+		rule endSimulation (state == 14);
 			$finish();
+		endrule
+
+		rule displayResults;
+			$display("Result: %d", uut.getResult());
+			state <= state + 1;
 		endrule
 
 	endmodule
