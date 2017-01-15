@@ -1,15 +1,27 @@
 package HelloBluespec;
-  module mkHelloBluespec(Empty);
 
-	Reg#(UInt#(25)) counter <- mkReg(0);
+  interface HelloBluespec;
+    (* always_enabled, always_ready *) method Bool getLed();
+  endinterface
 
-	rule displayHello (counter == 0);
-		$display("(%0d) Hello World", $time);
-	endrule
+  module mkHelloBluespec(HelloBluespec);
 
-	rule increment;
-		counter <= counter + 1;
-	endrule
+    Reg#(UInt#(25)) counter <- mkReg(0);
+    Reg#(Bool) is_led <- mkReg(False);
+
+    rule displayHello (counter == 0);
+      $display("(%0d) Hello World", $time);
+			$display(is_led);
+			is_led <= !is_led;
+    endrule
+
+    rule increment;
+      counter <= counter + 1;
+    endrule
+
+    method Bool getLed();
+      return is_led;
+    endmethod
 
   endmodule
 endpackage
