@@ -1,1 +1,8 @@
 *.sh
+*.bo
+*.ba
+*.cxx
+*.h
+*.o
+out
+*.so
