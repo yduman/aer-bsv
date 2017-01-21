@@ -4,6 +4,24 @@ package HelloFSM;
 	import HelloALU :: *;
 	import Vector :: *;
 
+	typedef struct {
+			Int#(32) opA;
+			Int#(32) opB;
+			AluOps operator;
+			Int#(32) expectedResult;
+	} TestData deriving (Eq, Bits);
+
+	typedef union tagged {
+		void Invalid;
+		t Valid;
+	} Maybe#(type t) deriving (Eq, Bits);
+
+	interface SimpleCounter;
+		method Action incr(UInt#(32) v);
+		method Action decr(UInt#(32) v);
+		method UInt#(32) counterValue();
+	endinterface 
+
 	// 2.1.1 Eine erste FSM
 	module mkFirstFSM(Empty);
 		Stmt myStmt = {
@@ -71,13 +89,6 @@ package HelloFSM;
 		endrule
 	endmodule
 
-	typedef struct {
-			Int#(32) opA;
-			Int#(32) opB;
-			AluOps operator;
-			Int#(32) expectedResult;
-	} TestData deriving (Eq, Bits);
-
 	// 2.1.4 FSM als Testbench
 	module mkFourthFSM(Empty);
 		HelloALU uut <- mkHelloALU();
@@ -120,7 +131,67 @@ package HelloFSM;
 			endseq
 		};
 		mkAutoFSM(test);
+	endmodule
+	
+	// 2.2.2 Maybe
+	module mkHelloMaybe(SimpleCounter);
+		RWire#(int) incrementWire <- mkRWire();
+		RWire#(int) decrementWire <- mkRWire();
+		Reg#(int) result <- mkReg(0);
 
+		rule count;
+			let counter = result;
+			Maybe#(int) maybeIncrement = incrementWire.wget();
+			Maybe#(int) maybeDecrement = decrementWire.wget();
+
+			int incrementValue = 0;
+			int decrementValue = 0;
+
+			if (isValid(maybeIncrement)) incrementValue = fromMaybe(?, maybeIncrement);
+			if (isValid(maybeDecrement)) decrementValue = fromMaybe(?, maybeDecrement);
+
+			result <= result + incrementValue - decrementValue;
+		endrule
+
+		method Action incr(UInt#(32) v);
+			incrementWire.wset(v);
+		endmethod
+
+		method Action decr(UInt#(32) v);
+			decrementWire.wset(v);
+		endmethod
+
+		method UInt#(32) counterValue();
+			return result;
+		endmethod
+
+	endmodule
+
+	module mkMaybeTest(Empty);
+		SimpleCounter uut <- mkHelloMaybe();
+		Stmt testbench = {
+			seq
+				action 
+					uut.incr(5);
+				endaction
+
+				action 
+					$display("%d", uut.counterValue());
+					uut.incr(5);
+					uut.decr(6);
+				endaction
+
+				action
+					$display("%d", uut.counterValue());
+					uut.decr(4);
+				endaction
+
+				action 
+					$display("%d", uut.counterValue());
+				endaction
+			endseq
+		};
+		mkAutoFSM(testbench);
 	endmodule
 
 endpackage

@@ -16,7 +16,6 @@ package HelloALU;
 	endinterface
 
 	module mkPower(Power#(t)) provisos (Bits#(t, t_sz), Ord#(t), Arith#(t), Eq#(t));
-		
 		Reg#(t) operandA <- mkReg(0);
 		Reg#(t) operandB <- mkReg(0);
 		Reg#(t) result <- mkReg(0);
@@ -88,7 +87,7 @@ package HelloALU;
 			endcase
 			result <= tagged Unsigned tmp;
 			new_values <= False;
-			has_result <= True; 
+			has_result <= True;
 		endrule
 
 		method Action setupCalculation(AluOps op, SignedOrUnsigned a, SignedOrUnsigned b) if (!new_values);
