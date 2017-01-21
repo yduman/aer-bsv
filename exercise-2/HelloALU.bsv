@@ -1,16 +1,25 @@
 package HelloALU;
 	
-	typedef enum{Mul, Div, Add, Sub, And, Or, Pow} AluOps deriving (Eq, Bits);
+	typedef enum { 
+		Mul, Div, Add, Sub, And, Or, Pow 
+	} AluOps deriving (Eq, Bits);
+	
+	// 2.2.1 Tagged Unions und flexible ALU 
+	typedef union tagged { 
+		UInt#(32) Unsigned; 
+		Int#(32) Signed; 
+	} SignedOrUnsigned deriving (Eq, Bits);
 
-	interface Power;
-		method Action setOperands(Int#(32) a, Int#(32) b);
-		method Int#(32) getResult();
+	interface Power#(type t);
+		method Action setOperands(t a, t b);
+		method t getResult();
 	endinterface
 
-	module mkPower(Power);
-		Reg#(Int#(32)) operandA <- mkReg(0);
-		Reg#(Int#(32)) operandB <- mkReg(0);
-		Reg#(Int#(32)) result <- mkReg(0);
+	module mkPower(Power#(t)) provisos (Bits#(t, t_sz), Ord#(t), Arith#(t), Eq#(t));
+		
+		Reg#(t) operandA <- mkReg(0);
+		Reg#(t) operandB <- mkReg(0);
+		Reg#(t) result <- mkReg(0);
 		Reg#(Bool) has_result <- mkReg(False);
 
 		rule calculate_power (operandB > 0);
@@ -22,50 +31,67 @@ package HelloALU;
 			has_result <= True;
 		endrule
 
-		method Action setOperands(Int#(32) a, Int#(32) b);
+		method Action setOperands(t a, t b);
 			result <= 1;
 			operandA <= a;
 			operandB <= b;
 			has_result <= False;
 		endmethod
 
-		method Int#(32) getResult() if (has_result);
+		method t getResult() if (has_result);
 			return result;
 		endmethod
 	endmodule
 
 	interface HelloALU;
-		method Action setupCalculation(AluOps op, Int#(32) a, Int#(32) b);
-		method ActionValue#(Int#(32)) getResult();
+		method Action setupCalculation(AluOps op, SignedOrUnsigned a, SignedOrUnsigned b);
+		method ActionValue#(SignedOrUnsigned) getResult();
 	endinterface
 
 	module mkHelloALU(HelloALU);
-		Reg#(Int#(32)) operandA <- mkReg(0);
-		Reg#(Int#(32)) operandB <- mkReg(0);
+		Reg#(SignedOrUnsigned) operandA <- mkReg(tagged Signed 0);
+		Reg#(SignedOrUnsigned) operandB <- mkReg(tagged Signed 0);
+		Reg#(SignedOrUnsigned) result <- mkReg(tagged Signed 0);
 		Reg#(AluOps) operation <- mkReg(Mul);
-		Reg#(Int#(32)) result <- mkReg(0);
 		Reg#(Bool) has_result <- mkReg(False);
 		Reg#(Bool) new_values <- mkReg(False);
+		
+		Power#(UInt#(32)) powerUInt <- mkPower();
+		Power#(Int#(32)) powerInt <- mkPower();
 
-		Power pow <- mkPower();
-
-		rule calculate (new_values);
+		rule calculateSigned (operandA matches tagged Signed .aa &&& operandB matches tagged Signed .bb &&& new_values);
 			Int#(32) tmp = 0;
 			case(operation)
-				Mul: tmp = operandA * operandB;
-				Div: tmp = operandA / operandB;
-				Add: tmp = operandA + operandB;
-				Sub: tmp = operandA - operandB;
-				And: tmp = operandA & operandB;
-				Or: tmp = operandA | operandB;
-				Pow: tmp = pow.getResult();
+				Mul: tmp = aa * bb;
+				Div: tmp = aa / bb;
+				Add: tmp = aa + bb;
+				Sub: tmp = aa - bb;
+				And: tmp = aa & bb;
+				Or: tmp  = aa | bb;
+				Pow: tmp = powerInt.getResult();
 			endcase
-			result <= tmp;
+			result <= tagged Signed tmp;
 			new_values <= False;
 			has_result <= True; 
 		endrule
 
-		method Action setupCalculation(AluOps op, Int#(32) a, Int#(32) b) if (!new_values);
+		rule calculateUnsigned (operandA matches tagged Unsigned .aa &&& operandB matches tagged Unsigned .bb &&& new_values);
+			UInt#(32) tmp = 0;
+			case(operation)
+				Mul: tmp = aa * bb;
+				Div: tmp = aa / bb;
+				Add: tmp = aa + bb;
+				Sub: tmp = aa - bb;
+				And: tmp = aa & bb;
+				Or: tmp  = aa | bb;
+				Pow: tmp = powerUInt.getResult();
+			endcase
+			result <= tagged Unsigned tmp;
+			new_values <= False;
+			has_result <= True; 
+		endrule
+
+		method Action setupCalculation(AluOps op, SignedOrUnsigned a, SignedOrUnsigned b) if (!new_values);
 			operandA <= a;
 			operandB <= b;
 			operation <= op;
@@ -73,10 +99,15 @@ package HelloALU;
 			has_result <= False;
 
 			if (op == Pow)
-				pow.setOperands(a, b);
+				if (operandA matches tagged Signed .aa &&& operandB matches tagged Signed .bb)
+					powerInt.setOperands(aa, bb);
+				else if (operandA matches tagged Unsigned .aa &&& operandB matches tagged Unsigned .bb)
+					powerUInt.setOperands(aa, bb);
+				else
+					$display("Both operands are mixed within type!");
 		endmethod
 
-		method ActionValue#(Int#(32)) getResult() if (has_result);
+		method ActionValue#(SignedOrUnsigned) getResult() if (has_result);
 			has_result <= False;
 			return result;
 		endmethod
@@ -88,43 +119,43 @@ package HelloALU;
 
 		rule testMul (state == 0);
 			$display("Testing multiplication of 4 and 5...");
-			uut.setupCalculation(Mul, 4, 5);
+			uut.setupCalculation(Mul, tagged Unsigned 4, tagged Unsigned 5);
 			state <= state + 1;
 		endrule
 
 		rule testDiv (state == 2);
 			$display("Testing division of 4 and 2...");
-			uut.setupCalculation(Div, 4, 2);
+			uut.setupCalculation(Div, tagged Unsigned 4, tagged Unsigned 2);
 			state <= state + 1;
 		endrule
 
 		rule testAdd (state == 4);
 			$display("Testing addition of 5 and 5...");
-			uut.setupCalculation(Add, 5, 5);
+			uut.setupCalculation(Add, tagged Unsigned 5, tagged Unsigned 5);
 			state <= state + 1;
 		endrule
 
 		rule testSub (state == 6);
 			$display("Testing subtraction of 10 and 4...");
-			uut.setupCalculation(Sub, 10, 4);
+			uut.setupCalculation(Sub, tagged Unsigned 10, tagged Unsigned 4);
 			state <= state + 1;
 		endrule
 
 		rule testAnd (state == 8);
 			$display("Testing logical AND between 4 and 4...");
-			uut.setupCalculation(And, 4, 4);
+			uut.setupCalculation(And, tagged Unsigned 4, tagged Unsigned 4);
 			state <= state + 1;
 		endrule
 
 		rule testOr (state == 10);
 			$display("Testing logical OR between 8 and 8...");
-			uut.setupCalculation(Or, 8, 8);
+			uut.setupCalculation(Or, tagged Unsigned 8, tagged Unsigned 8);
 			state <= state + 1;
 		endrule
 
 		rule testPow (state == 12);
 			$display("Testing 2 to the power of 5...");
-			uut.setupCalculation(Pow, 2, 5);
+			uut.setupCalculation(Pow, tagged Unsigned 2, tagged Unsigned 5);
 			state <= state + 1;
 		endrule
 
