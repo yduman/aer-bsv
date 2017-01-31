@@ -61,7 +61,7 @@ module mkMedian(Median);
 		for (Integer i = 0; i < 3; i = i + 1) begin
 			GrayScaleStream iSort;
 			for (Integer j = 0; j < 3; j = j + 1) begin
-				iSort[j] = sorted[i][j];
+				iSort[j] = sorted[j][i];
 			end
 
 			sortingNetwork[3 + i].request.put(iSort);
